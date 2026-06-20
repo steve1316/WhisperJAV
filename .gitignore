@@ -56,6 +56,7 @@ test_media/
 test_output/
 # Internal dev docs (not published)
 docs/audit/
+docs/superpowers/
 docs/design/
 docs/plan/
 docs/plans/
@@ -154,6 +155,9 @@ checkpoints/
 WhisperJAV.command
 WhisperJAV.sh
 WhisperJAV.bat
+
+# Local PyInstaller build artifact of whisperjav_launcher.py (regenerable, ~8MB)
+WhisperJAV.exe
 
 
 
