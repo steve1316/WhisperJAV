@@ -349,44 +349,79 @@ const FileListManager = {
     initializeDragDrop() {
         const fileList = document.getElementById('fileList');
 
-        fileList.addEventListener('dragover', (e) => {
+        // IMPORTANT: A WebView2 'drop' event only fires if the preceding 'dragover'
+        // was preventDefault()-ed. Previously these listeners were bound ONLY to
+        // #fileList (a small box), so the OS showed the "no-drop" (stop) cursor over
+        // the rest of the window and no drop event ever reached pywebview. Binding on
+        // `document` makes the ENTIRE window a valid drop target. Doing the
+        // preventDefault here in JS (rather than via a Python DOM handler) is reliable
+        // and avoids a Python round-trip on every dragover tick.
+        const showDragFeedback = () => { if (fileList) fileList.classList.add('drag-over'); };
+        const clearDragFeedback = () => { if (fileList) fileList.classList.remove('drag-over'); };
+
+        document.addEventListener('dragenter', (e) => {
             e.preventDefault();
-            e.stopPropagation();
-            fileList.classList.add('drag-over');
+            showDragFeedback();
         });
 
-        fileList.addEventListener('dragenter', (e) => {
+        document.addEventListener('dragover', (e) => {
             e.preventDefault();
-            e.stopPropagation();
-            fileList.classList.add('drag-over');
+            if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+            showDragFeedback();
         });
 
-        fileList.addEventListener('dragleave', () => {
-            fileList.classList.remove('drag-over');
+        document.addEventListener('dragleave', (e) => {
+            // relatedTarget is null only when the cursor leaves the window entirely;
+            // ignore transitions between child elements so the highlight doesn't flicker.
+            if (!e.relatedTarget) clearDragFeedback();
         });
 
-        fileList.addEventListener('drop', (e) => {
+        document.addEventListener('drop', (e) => {
+            // Prevent the browser from navigating to the dropped file. Do NOT call
+            // stopPropagation() — pywebview's own document-level 'drop' listener
+            // (registered from main.py) must still run to extract the native file
+            // paths and call FileListManager.addDroppedFiles(paths).
             e.preventDefault();
-            e.stopPropagation();
-            fileList.classList.remove('drag-over');
-
-            // Note: Actual file path extraction is handled by Python DOM event handler
-            // in main.py using pywebviewFullPath, which bypasses browser security restrictions.
-            // This handler just prevents default browser behavior and provides visual feedback.
-            // Python will call FileListManager.addDroppedFiles(paths) with the full paths.
+            clearDragFeedback();
         });
     },
 
-    // Method called by Python DOM event handler with full file paths
+    // Extensions accepted via drag-and-drop. The AI SRT Translate tab (tab4)
+    // consumes only .srt subtitles; the transcription/ensemble tabs need media.
+    SRT_EXTENSIONS: ['.srt'],
+    MEDIA_EXTENSIONS: [
+        '.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm', '.ts', '.m4v', '.mpg', '.mpeg',
+        '.mp3', '.wav', '.flac', '.m4a', '.m4b', '.aac', '.ogg', '.opus', '.wma'
+    ],
+
+    // Method called by the Python DOM drop handler (main.py) with full file paths.
     addDroppedFiles(paths) {
         if (!Array.isArray(paths) || paths.length === 0) {
             return;
         }
 
+        // Tab-aware filtering — mirror the Add File(s) button so a drop on the AI SRT
+        // Translate tab only accepts .srt, and transcription tabs only accept media
+        // (a path with no extension is treated as a folder, matching Add Folder).
+        const isSrtMode = AppState.activeTab === 'tab4';
+        const hasExt = (p, exts) => exts.some(ext => p.toLowerCase().endsWith(ext));
+        const looksLikeFolder = (p) => {
+            const last = p.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || '';
+            return !last.includes('.');
+        };
+        const isCompatible = (p) => isSrtMode
+            ? hasExt(p, this.SRT_EXTENSIONS)
+            : (hasExt(p, this.MEDIA_EXTENSIONS) || looksLikeFolder(p));
+
         let addedCount = 0;
         let duplicates = 0;
+        const rejected = [];
 
         paths.forEach(path => {
+            if (!isCompatible(path)) {
+                rejected.push(path);
+                return;
+            }
             if (!AppState.selectedFiles.includes(path)) {
                 AppState.selectedFiles.push(path);
                 addedCount++;
@@ -402,6 +437,16 @@ const FileListManager = {
 
         if (duplicates > 0) {
             ConsoleManager.log(`ℹ Skipped ${duplicates} duplicate(s)`, 'info');
+        }
+
+        if (rejected.length > 0) {
+            const accepts = isSrtMode
+                ? '.srt subtitle files'
+                : 'video/audio files (or folders)';
+            ConsoleManager.log(
+                `⚠ Ignored ${rejected.length} incompatible item(s) — the ${isSrtMode ? 'AI SRT Translate' : 'current'} tab accepts ${accepts}.`,
+                'warning'
+            );
         }
     },
 

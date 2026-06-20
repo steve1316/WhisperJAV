@@ -160,27 +160,27 @@ def on_drop_event(e):
 
 def bind_dom_events(window):
     """
-    Bind drag-drop events to window DOM after creation.
+    Bind the drag-drop DOM handler. Must run AFTER the document is loaded.
 
-    Registers handlers for dragenter, dragover, and drop events
-    to enable native file path access via pywebviewFullPath.
+    Only the 'drop' event is bound here: it is what lets pywebview capture the
+    native file paths (via pywebviewFullPath) and pass them to JavaScript.
+
+    The 'dragenter'/'dragover' preventDefault — which makes the whole window a
+    valid drop target (otherwise WebView2 shows the no-drop cursor and never
+    fires a drop event) — is handled in JavaScript
+    (FileListManager.initializeDragDrop). Doing it there is reliable and avoids a
+    Python round-trip on every dragover tick.
 
     Args:
         window: PyWebView window instance
     """
     try:
-        # Prevent default for drag events (required for drop to work)
-        # preventDefault=True, stopPropagation=True
-        window.dom.document.events.dragenter += DOMEventHandler(lambda e: None, True, True)
-        window.dom.document.events.dragover += DOMEventHandler(lambda e: None, True, True)
-
-        # Handle actual file drops
+        # prevent_default=True stops the browser from navigating to the dropped file.
         window.dom.document.events.drop += DOMEventHandler(on_drop_event, True, True)
-
-        print("DOM drag-drop events bound successfully")
+        print("DOM drop handler bound successfully")
     except Exception as ex:
-        print(f"Warning: Could not bind DOM events: {ex}")
-        print("Drag-drop may not work correctly. Please use Add Files button.")
+        print(f"Warning: Could not bind DOM drop handler: {ex}")
+        print("Drag-drop may not work correctly. Please use Add File(s).")
 
 
 def get_asset_path(relative_path: str) -> Path:
@@ -533,14 +533,27 @@ def main():
         # NOT via browser localStorage — so private_mode loses nothing valuable.
         # Theme selection resets to default each session (acceptable tradeoff).
 
+        # Bind drag-drop DOM events once the page DOM is ready. The previous code
+        # bound them from webview.start(func=...), which can run BEFORE the document
+        # exists — the bind then failed silently and drag-drop appeared dead (no-drop
+        # cursor everywhere). window.events.loaded fires after the DOM is available,
+        # so binding there is reliable.
+        _dom_bound = {'done': False}
+
+        def _bind_dom_once(*_args):
+            if _dom_bound['done']:
+                return
+            _dom_bound['done'] = True
+            bind_dom_events(window)
+
+        window.events.loaded += _bind_dom_once
+
         # If icon kwarg couldn't be used (older pywebview), set icon after start on Windows
         if platform.system() == 'Windows' and icon_path and not icon_used:
-            def _after_start():
-                _set_windows_icon('WhisperJAV GUI', icon_path)
-                bind_dom_events(window)
-            webview.start(debug=debug_mode, private_mode=True, func=_after_start)
+            webview.start(debug=debug_mode, private_mode=True,
+                          func=lambda: _set_windows_icon('WhisperJAV GUI', icon_path))
         else:
-            webview.start(debug=debug_mode, private_mode=True, func=lambda: bind_dom_events(window))
+            webview.start(debug=debug_mode, private_mode=True)
 
     except FileNotFoundError as e:
         print("\nERROR: Asset file not found!")
