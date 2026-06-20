@@ -62,7 +62,7 @@ from typing import Optional
 from .providers import PROVIDER_CONFIGS, SUPPORTED_SOURCES, SUPPORTED_TARGETS
 from whisperjav.utils.output_naming import translated_srt_path
 from .core import translate_subtitle, _normalize_api_base, _api_base_to_custom_server, cap_batch_size_for_context, compute_max_output_tokens
-from .instructions import get_instruction_content, get_cache_dir
+from .instructions import get_instruction_content, get_cache_dir, adapt_instructions_to_source_language
 from .settings import load_settings, create_default_settings, show_settings, get_settings_path, resolve_config
 from .configure import configure_command
 
@@ -180,13 +180,25 @@ def resolve_instruction_file_or_content(args, merged: dict) -> Optional[str]:
     instruction_content = get_instruction_content(tone=tone, refresh=False)
 
     if instruction_content:
-        # Save to temp file
+        # Adapt the (Japanese-authored) template to the selected source language
+        # so neither the model nor the temp instructions file says "Japanese"
+        # when the user picked, e.g., Korean.
+        instruction_content = adapt_instructions_to_source_language(instruction_content, source_lang)
+
+        # Save to temp file. Include the source language in the filename so
+        # different languages don't overwrite each other and so the user can
+        # see at a glance which language the instructions are written for.
+        safe_lang = (source_lang or 'japanese').strip().lower() or 'japanese'
         temp_dir = Path(tempfile.gettempdir()) / 'whisperjav_translate'
         temp_dir.mkdir(exist_ok=True)
-        temp_file = temp_dir / f'instructions_{tone}.txt'
+        temp_file = temp_dir / f'instructions_{tone}_{safe_lang}.txt'
 
         with open(temp_file, 'w', encoding='utf-8') as f:
             f.write(instruction_content)
+
+        if safe_lang != 'japanese':
+            print(f"  Adapted instructions for source language: {source_lang.capitalize()}",
+                  file=sys.stderr)
 
         return str(temp_file)
 
@@ -541,8 +553,22 @@ def main():
     print(f"  Model: {model}", file=sys.stderr)
     print(f"  Source: {source_lang} -> Target: {target_lang}", file=sys.stderr)
     print(f"  Tone: {effective_tone}", file=sys.stderr)
+    # --- Advanced Settings (echoed so the GUI user can confirm they took effect) ---
     print(f"  Scene threshold: {merged.get('scene_threshold', 60.0)}s", file=sys.stderr)
     print(f"  Max batch size: {merged.get('max_batch_size', 30)}", file=sys.stderr)
+    print(f"  Max retries: {getattr(args, 'max_retries', 3)}", file=sys.stderr)
+    _rate_limit = getattr(args, 'rate_limit', None)
+    print(f"  Rate limit: {f'{_rate_limit} req/min' if _rate_limit else 'none'}", file=sys.stderr)
+    if getattr(args, 'endpoint', None):
+        print(f"  Custom endpoint: {args.endpoint}", file=sys.stderr)
+    _ctx_fields = []
+    if getattr(args, 'movie_title', None):
+        _ctx_fields.append('title')
+    if getattr(args, 'actress', None):
+        _ctx_fields.append('names')
+    if getattr(args, 'movie_plot', None):
+        _ctx_fields.append('plot')
+    print(f"  Movie context: {', '.join(_ctx_fields) if _ctx_fields else 'none'}", file=sys.stderr)
     if instruction_file:
         print(f"  Instructions: {instruction_file}", file=sys.stderr)
     print(f"  Provider options: {provider_options}", file=sys.stderr)

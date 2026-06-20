@@ -17,6 +17,7 @@ DEFAULT_SETTINGS = {
     '_comment': 'WhisperJAV-Translate user settings',
     'provider': 'deepseek',
     'model': None,
+    'source': 'japanese',
     'target_language': 'english',
     'tone': 'standard',
     'scene_threshold': 60.0,
@@ -150,6 +151,10 @@ def resolve_config(cli_args, settings: Optional[dict] = None) -> dict:
             # Map CLI arg names to config keys
             if key == 'target':
                 config['target_language'] = value
+            elif key == 'source':
+                # Without this branch the user-selected source language was
+                # silently dropped and cli.py fell back to 'japanese'.
+                config['source'] = value
             elif key == 'scene_threshold':
                 config['scene_threshold'] = value
             elif key == 'max_batch_size':
