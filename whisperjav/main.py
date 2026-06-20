@@ -68,6 +68,7 @@ fix_stdout()
 
 from whisperjav.utils.logger import setup_logger, logger
 from whisperjav.utils.device_detector import get_best_device
+from whisperjav.utils.output_naming import transcription_srt_name
 from whisperjav.modules.media_discovery import MediaDiscovery
 from whisperjav.pipelines.faster_pipeline import FasterPipeline
 from whisperjav.pipelines.fast_pipeline import FastPipeline
@@ -1251,8 +1252,8 @@ def process_files_sync(media_files: List[Dict], args: argparse.Namespace, resolv
                     expected_dir = Path(file_path_str).parent
                 else:
                     expected_dir = Path(args.output_dir)
-                expected_srt = expected_dir / f"{media_basename}.{output_lang_code}.whisperjav.srt"
-                expected_vtt = expected_dir / f"{media_basename}.{output_lang_code}.whisperjav.vtt"
+                expected_srt = expected_dir / transcription_srt_name(media_basename, output_lang_code)
+                expected_vtt = expected_srt.with_suffix(".vtt")
                 if expected_srt.exists() or expected_vtt.exists():
                     logger.info(f"Skipping (output exists): {file_name}")
                     skipped_count += 1
@@ -1474,8 +1475,8 @@ def process_files_async(media_files: List[Dict], args: argparse.Namespace, resol
                 expected_dir = Path(file_path_str).parent
             else:
                 expected_dir = Path(args.output_dir)
-            expected_srt = expected_dir / f"{media_basename}.{output_lang_code}.whisperjav.srt"
-            expected_vtt = expected_dir / f"{media_basename}.{output_lang_code}.whisperjav.vtt"
+            expected_srt = expected_dir / transcription_srt_name(media_basename, output_lang_code)
+            expected_vtt = expected_srt.with_suffix(".vtt")
             if expected_srt.exists() or expected_vtt.exists():
                 logger.info(f"Skipping (output exists): {Path(file_path_str).name}")
                 skipped_files.append(file_path_str)

@@ -60,6 +60,7 @@ from pathlib import Path
 from typing import Optional
 
 from .providers import PROVIDER_CONFIGS, SUPPORTED_SOURCES, SUPPORTED_TARGETS
+from whisperjav.utils.output_naming import translated_srt_path
 from .core import translate_subtitle, _normalize_api_base, _api_base_to_custom_server, cap_batch_size_for_context, compute_max_output_tokens
 from .instructions import get_instruction_content, get_cache_dir
 from .settings import load_settings, create_default_settings, show_settings, get_settings_path, resolve_config
@@ -69,19 +70,14 @@ import tempfile
 
 
 def generate_output_path(input_path: str, target_lang: str) -> str:
-    """Generate output filename for translated subtitle."""
-    input_path = Path(input_path)
-    stem = input_path.stem
+    """Generate output filename for translated subtitle.
 
-    # If stem has language code, replace it
-    parts = stem.split('.')
-    if len(parts) > 1:
-        # Remove last part if it looks like a language code
-        if parts[-1] in ['japanese', 'english', 'ja', 'en', 'jp']:
-            stem = '.'.join(parts[:-1])
-
-    output_name = f"{stem}.{target_lang}.srt"
-    return str(input_path.parent / output_name)
+    Delegates to the shared naming scheme, which strips a trailing source
+    language tag and appends a short ISO target code: a transcription named
+    ``video.whisperjav.ja.srt`` translated to English becomes
+    ``video.whisperjav.en.srt``.
+    """
+    return str(translated_srt_path(input_path, target_lang))
 
 
 def build_provider_options(args, settings_model_params: dict, effective_tone: str) -> dict:

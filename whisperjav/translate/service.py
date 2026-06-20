@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from .providers import PROVIDER_CONFIGS, SUPPORTED_TARGETS
+from whisperjav.utils.output_naming import translated_srt_path
 from .settings import load_settings, DEFAULT_SETTINGS
 from .instructions import get_instruction_content
 from .core import translate_subtitle, _normalize_api_base, _api_base_to_custom_server, cap_batch_size_for_context, compute_max_output_tokens
@@ -323,12 +324,7 @@ def translate_with_config(
     if output_path:
         resolved_output_path = Path(output_path)
     else:
-        stem = input_file.stem
-        # Remove existing language suffix if present
-        parts = stem.split('.')
-        if len(parts) > 1 and parts[-1] in ['japanese', 'english', 'ja', 'en', 'jp', 'chinese', 'indonesian', 'spanish']:
-            stem = '.'.join(parts[:-1])
-        resolved_output_path = input_file.parent / f"{stem}.{target_lang}.srt"
+        resolved_output_path = translated_srt_path(input_file, target_lang)
 
     # Log configuration
     logger.info(f"Translation: {input_file.name} -> {target_lang}")
