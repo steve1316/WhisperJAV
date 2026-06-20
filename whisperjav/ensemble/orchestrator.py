@@ -4,6 +4,7 @@ import json
 import multiprocessing as mp
 import pickle
 import shutil
+import sys
 import time
 # ProcessPoolExecutor removed - using raw mp.Process with Drop-Box pattern
 # from concurrent.futures import ProcessPoolExecutor
@@ -13,8 +14,9 @@ from typing import Any, Dict, List, Optional
 
 from whisperjav.utils.logger import logger
 from whisperjav.utils.metadata_manager import MetadataManager
-from whisperjav.utils.parameter_tracer import NullTracer
 from whisperjav.utils.output_naming import ensemble_srt_name
+from whisperjav.utils.parameter_tracer import NullTracer
+from whisperjav.utils.progress_markers import transcribe_marker
 
 from .merge import MergeEngine
 from .pass_worker import WorkerPayload, run_pass_worker
@@ -162,6 +164,8 @@ class EnsembleOrchestrator:
             media_files=serialized_media,
             pass_config=pass1_config,
             language_code=pass_languages[1],
+            pass_total=2 if pass2_config else 1,
+            emit_file_progress=True,
         )
 
         # Trace pass 1 complete
@@ -212,6 +216,8 @@ class EnsembleOrchestrator:
                 media_files=serialized_media,
                 pass_config=pass2_config,
                 language_code=pass_languages[2],
+                pass_total=2,
+                emit_file_progress=True,
             )
 
             # Trace pass 2 complete
@@ -509,11 +515,18 @@ class EnsembleOrchestrator:
                 "[%d/%d] %s — Pass 1 (%s)...",
                 file_idx, total_files, basename, pass1_config['pipeline'],
             )
+            _serial_pt = 2 if pass2_config else 1
+            _serial_name = Path(media_info.get("path", basename)).name
+            print(transcribe_marker(_serial_name, file_idx, total_files,
+                                    pass_number=1, pass_total=_serial_pt),
+                  file=sys.stderr, flush=True)
             pass1_results = self._run_pass_in_subprocess(
                 pass_number=1,
                 media_files=[media_info],
                 pass_config=pass1_config,
                 language_code=pass_languages[1],
+                pass_total=_serial_pt,
+                emit_file_progress=False,
             )
 
             # --- Pass 2 (if enabled) ---
@@ -523,11 +536,16 @@ class EnsembleOrchestrator:
                     "[%d/%d] %s — Pass 2 (%s)...",
                     file_idx, total_files, basename, pass2_config['pipeline'],
                 )
+                print(transcribe_marker(_serial_name, file_idx, total_files,
+                                        pass_number=2, pass_total=2),
+                      file=sys.stderr, flush=True)
                 pass2_results = self._run_pass_in_subprocess(
                     pass_number=2,
                     media_files=[media_info],
                     pass_config=pass2_config,
                     language_code=pass_languages[2],
+                    pass_total=2,
+                    emit_file_progress=False,
                 )
 
             # --- Merge + metadata (reuses shared method) ---
@@ -601,6 +619,8 @@ class EnsembleOrchestrator:
         media_files: List[Dict[str, Any]],
         pass_config: Dict[str, Any],
         language_code: str,
+        pass_total: int = 1,
+        emit_file_progress: bool = False,
     ) -> Dict[str, Dict[str, Any]]:
         """
         Execute a pass inside an isolated worker process.
@@ -619,6 +639,8 @@ class EnsembleOrchestrator:
 
         payload = WorkerPayload(
             pass_number=pass_number,
+            pass_total=pass_total,
+            emit_file_progress=emit_file_progress,
             media_files=media_files,
             pass_config=pass_config,
             output_dir=str(self.output_dir),

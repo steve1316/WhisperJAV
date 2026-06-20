@@ -83,6 +83,7 @@ from whisperjav.utils.preflight_check import enforce_gpu_requirement, run_prefli
 from whisperjav.utils.progress_aggregator import VerbosityLevel, create_progress_handler
 from whisperjav.utils.async_processor import AsyncPipelineManager, ProcessingStatus
 from whisperjav.utils.parameter_tracer import create_tracer
+from whisperjav.utils.progress_markers import transcribe_marker
 from whisperjav.config.manager import ConfigManager, quick_update_ui_preference
 
 # Translation service - direct function call instead of subprocess
@@ -971,6 +972,7 @@ def process_files_sync(media_files: List[Dict], args: argparse.Namespace, resolv
         unified_manager = UnifiedProgressManager(verbosity=verbosity)
         unified_manager.total_files = len(media_files)  # Store for reference
         progress = ProgressDisplayAdapter(unified_manager)
+        progress.total_files = len(media_files)  # Sync adapter total (drives the [N/total] display)
     
     # Detect "source" sentinel: save SRT next to each input video
     output_to_source = args.output_dir.lower().strip() == "source"
@@ -1267,6 +1269,9 @@ def process_files_sync(media_files: List[Dict], args: argparse.Namespace, resolv
                 per_file_dir.mkdir(parents=True, exist_ok=True)
 
             progress.set_current_file(file_path_str, i)
+            # GUI per-file progress marker (parsed by webview_gui/api.py)
+            print(transcribe_marker(file_name, i, len(media_files)),
+                  file=sys.stderr, flush=True)
 
             try:
                 metadata = pipeline.process(media_info)
@@ -1441,10 +1446,17 @@ def process_files_async(media_files: List[Dict], args: argparse.Namespace, resol
     resolved_config['scene_method'] = getattr(args, 'scene_detection_method', None) or 'auditok'
     
     # Create async manager
+    _async_progress = {"n": 0}
+
     def progress_callback(message: Dict):
         """Handle progress messages."""
         msg_type = message.get('type')
         if msg_type == 'file_start':
+            _async_progress["n"] += 1
+            # GUI per-file progress marker (parsed by webview_gui/api.py)
+            print(transcribe_marker(Path(message['filename']).name,
+                                    _async_progress["n"], len(files_to_process)),
+                  file=sys.stderr, flush=True)
             print(f"\nProcessing: {message['filename']}")
         elif msg_type == 'task_complete':
             if message['success']:

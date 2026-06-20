@@ -896,7 +896,7 @@ const ProcessManager = {
                 this.updateButtonStates();
 
                 // Start progress indication
-                ProgressManager.setIndeterminate(true);
+                ProgressManager.setProgress(0);
                 ProgressManager.setStatus('Running...');
 
                 // Log command
@@ -989,8 +989,22 @@ const ProcessManager = {
                 // should act; the rest must exit here.
                 if (!AppState.statusPollInterval) return;
 
-                // Update status label
-                ProgressManager.setStatus(this.formatStatus(status.status));
+                // Update status label — per-file indicator when available
+                if (status.current_file) {
+                    const count = status.files_total
+                        ? ` (${status.files_current}/${status.files_total})`
+                        : '';
+                    const passLabel = (status.pass_number && status.pass_total)
+                        ? ` Pass ${status.pass_number}/${status.pass_total}`
+                        : '';
+                    ProgressManager.setStatus(
+                        `Transcribing${passLabel}: ${status.current_file}${count}`);
+                    if (typeof status.progress === 'number') {
+                        ProgressManager.setProgress(status.progress);
+                    }
+                } else {
+                    ProgressManager.setStatus(this.formatStatus(status.status));
+                }
 
                 // Check if process finished
                 if (status.status === 'completed' ||
@@ -5161,7 +5175,7 @@ const EnsembleManager = {
                 ProcessManager.updateButtonStates();
 
                 // Start progress indication
-                ProgressManager.setIndeterminate(true);
+                ProgressManager.setProgress(0);
                 ProgressManager.setStatus('Running...');
 
                 // Log command
@@ -6840,7 +6854,10 @@ const TranslatorManager = {
 
                 // Update current file display
                 if (status.current_file) {
-                    this.setStatus(`Translating: ${status.current_file}`);
+                    const count = status.files_total
+                        ? ` (${status.files_current}/${status.files_total})`
+                        : '';
+                    this.setStatus(`Translating: ${status.current_file}${count}`);
                 }
 
                 // Fetch logs
