@@ -217,7 +217,16 @@ class SRTPostProcessor:
             # Move cleaned file to final destination
             final_clean_path = target_dir / final_name
             shutil.move(clean_path, final_clean_path)
-            
+
+            # Re-join cues that were split mid-sentence (e.g. a tail cue beginning
+            # with an ellipsis). Best-effort: never fail post-processing over this.
+            from whisperjav.modules.continuation_stitcher import stitch_srt_file_safe
+            merges = stitch_srt_file_safe(
+                final_clean_path,
+                on_error=lambda e: logger.warning(f"Continuation stitching skipped: {e}"))
+            if merges:
+                logger.debug(f"Continuation stitcher merged {merges} split cue(s) in {final_clean_path}")
+
             # Move log file to raw_subs folder
             raw_subs_dir = target_dir / "raw_subs"
             raw_subs_dir.mkdir(exist_ok=True)

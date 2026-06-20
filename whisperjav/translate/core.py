@@ -771,6 +771,17 @@ def translate_subtitle(
         print(f"[TRANSLATE] " + "=" * 50, file=sys.stderr)
         print(f"", file=sys.stderr)
 
+        # Re-join cues that were split mid-sentence during segmentation or per-cue
+        # translation (e.g. a tail cue beginning with an ellipsis). Best-effort —
+        # never let a stitching error mask a successful translation.
+        if _translation_success:
+            from whisperjav.modules.continuation_stitcher import stitch_srt_file_safe
+            _merges = stitch_srt_file_safe(
+                output_path,
+                on_error=lambda _e: print(f"[TRANSLATE]   Continuation stitching skipped: {_e}", file=sys.stderr))
+            if _merges:
+                print(f"[TRANSLATE]   Continuation stitcher merged {_merges} split cue(s)", file=sys.stderr)
+
         # Return None on total failure so cli.py reports it as failed
         return output_path if _translation_success else None
 
