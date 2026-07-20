@@ -15,6 +15,14 @@ if (
     relaunch_for_utf8('whisperjav.main')
 
 # ===========================================================================
+# NATIVE CRASH DIAGNOSTICS - Must be before torch/ctranslate2 imports so a
+# C-level fault (e.g. exit code 0xC0000094) leaves a Python traceback instead
+# of a bare Windows exit code.
+# ===========================================================================
+from whisperjav.utils.native_diagnostics import install_native_diagnostics
+install_native_diagnostics()
+
+# ===========================================================================
 # EARLY WARNING SUPPRESSION - Must be before any library imports
 # ===========================================================================
 # Suppress noisy library warnings that don't affect functionality
