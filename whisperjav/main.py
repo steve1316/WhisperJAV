@@ -375,6 +375,24 @@ def parse_arguments():
                              type=int, default=None,
                              metavar="INT",
                              help="Padding around detected speech in milliseconds (default: backend-specific)")
+    tuning_group.add_argument("--speech-enhancer",
+                             choices=["none", "clearvoice", "zipenhancer", "bs-roformer", "ffmpeg-dsp"],
+                             default="none",
+                             help="Speech enhancement backend for balanced/fidelity - lifts quiet audio before VAD/ASR (default: none)")
+    tuning_group.add_argument("--speech-enhancer-model",
+                             type=str, default=None,
+                             help="Speech enhancer model variant (e.g. MossFormer2_SE_48K for clearvoice)")
+    tuning_group.add_argument("--hallucination-silence-threshold",
+                             type=float, default=None,
+                             metavar="SECONDS",
+                             help="Skip silent stretches longer than this (seconds) where hallucinations spawn (default: disabled)")
+    tuning_group.add_argument("--scene-energy-threshold",
+                             type=int, default=None,
+                             metavar="DB",
+                             help="Auditok scene-detection energy threshold in dB - lower catches quieter speech (default: sensitivity preset)")
+    tuning_group.add_argument("--quiet-audio", action="store_true",
+                             help="Bundle preset for whisper/ASMR (balanced/fidelity): neural enhancer + dual-track VAD, "
+                                  "lower VAD/scene thresholds, hallucination suppression. Explicit flags override the bundle.")
     tuning_group.add_argument("--condition-on-previous-text",
                              type=str, default=None,
                              choices=["true", "false"],
@@ -995,6 +1013,11 @@ def process_files_sync(media_files: List[Dict], args: argparse.Namespace, resolv
         "progress_display": progress,
         "parameter_tracer": tracer,
     }
+
+    # Dual-track enhancement: balanced/fidelity read enhance_for_vad from kwargs
+    # (enhanced audio drives VAD/scene detection, original audio feeds ASR).
+    if args.mode in ("balanced", "fidelity") and getattr(args, 'enhance_for_vad', False):
+        pipeline_args["enhance_for_vad"] = True
 
     # Select pipeline
     # --pipeline takes priority over --mode when specified
@@ -1646,6 +1669,29 @@ def main():
     log_level = "DEBUG" if args.debug else args.log_level
     logger = setup_logger("whisperjav", log_level, args.log_file)
 
+    # --quiet-audio: bundle of whisper/ASMR-friendly defaults for balanced/fidelity.
+    # Only fills knobs the user did not set explicitly, so explicit flags always win.
+    if getattr(args, 'quiet_audio', False):
+        if args.speech_enhancer == "none":
+            args.speech_enhancer = "clearvoice"
+            if args.speech_enhancer_model is None:
+                args.speech_enhancer_model = "MossFormer2_SE_48K"
+        args.enhance_for_vad = True
+        if args.vad_threshold is None:
+            args.vad_threshold = 0.15
+        if args.speech_pad_ms is None:
+            args.speech_pad_ms = 400
+        if args.scene_energy_threshold is None:
+            args.scene_energy_threshold = 20
+        if args.hallucination_silence_threshold is None:
+            args.hallucination_silence_threshold = 2.0
+        logger.info(
+            "Quiet-audio preset enabled: enhancer=%s (model=%s), vad_threshold=%s, "
+            "speech_pad_ms=%s, scene_energy=%s dB, hallucination_silence=%ss",
+            args.speech_enhancer, args.speech_enhancer_model, args.vad_threshold,
+            args.speech_pad_ms, args.scene_energy_threshold, args.hallucination_silence_threshold,
+        )
+
     if args.debug:
         logger.info("=" * 70)
         logger.info("DEBUG MODE ENABLED - Comprehensive diagnostic logging active")
@@ -1963,6 +2009,40 @@ def main():
                 resolved_config["params"]["decoder"] = {}
             resolved_config["params"]["decoder"]["condition_on_previous_text"] = condition_bool
             logger.info(f"Condition on previous text set via CLI: {condition_bool}")
+
+        # Re-enable Whisper's silence-skip hallucination guard (disabled in presets since v1.8.10-hf1)
+        hallucination_silence = getattr(args, 'hallucination_silence_threshold', None)
+        if hallucination_silence is not None:
+            hallucination_silence = max(0.0, hallucination_silence)
+            if "decoder" not in resolved_config["params"]:
+                resolved_config["params"]["decoder"] = {}
+            resolved_config["params"]["decoder"]["hallucination_silence_threshold"] = hallucination_silence
+            logger.info(f"Hallucination silence threshold set via CLI: {hallucination_silence}s")
+
+        # Lower auditok energy gate so quiet/whispered regions still become scenes
+        scene_energy = getattr(args, 'scene_energy_threshold', None)
+        if scene_energy is not None:
+            if "features" not in resolved_config:
+                resolved_config["features"] = {}
+            if "scene_detection" not in resolved_config["features"]:
+                resolved_config["features"]["scene_detection"] = {}
+            resolved_config["features"]["scene_detection"]["pass1_energy_threshold"] = scene_energy
+            resolved_config["features"]["scene_detection"]["pass2_energy_threshold"] = scene_energy
+            logger.info(f"Scene energy threshold set via CLI: {scene_energy} dB")
+
+        # Enable speech enhancement for single-pass balanced/fidelity (Qwen/two-pass have their own flags)
+        enhancer_backend = getattr(args, 'speech_enhancer', 'none')
+        if enhancer_backend and enhancer_backend != "none":
+            enhancer_cfg = resolved_config["params"].get("speech_enhancer") or {}
+            enhancer_cfg["backend"] = enhancer_backend
+            enhancer_model = getattr(args, 'speech_enhancer_model', None)
+            if enhancer_model:
+                enhancer_cfg["model"] = enhancer_model
+            resolved_config["params"]["speech_enhancer"] = enhancer_cfg
+            logger.info(
+                "Speech enhancer set via CLI: %s%s",
+                enhancer_backend, f" (model={enhancer_model})" if enhancer_model else "",
+            )
 
     # Handle --dump-params: dump resolved config to JSON and exit
     if args.dump_params:
