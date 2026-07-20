@@ -207,6 +207,32 @@ class WhisperJAVAPI:
         if credit:
             args += ["--credit", credit]
 
+        # Quiet/whisper-audio (ASMR) controls
+        speech_enhancer = options.get('speech_enhancer', '').strip()
+        if speech_enhancer and speech_enhancer != 'none':
+            args += ["--speech-enhancer", speech_enhancer]
+
+        speech_enhancer_model = options.get('speech_enhancer_model', '').strip()
+        if speech_enhancer_model:
+            args += ["--speech-enhancer-model", speech_enhancer_model]
+
+        if options.get('enhance_for_vad', False):
+            args += ["--enhance-for-vad"]
+
+        # Skip silent stretches where hallucinations spawn (seconds)
+        hallucination_silence = options.get('hallucination_silence_threshold', None)
+        if hallucination_silence not in (None, ''):
+            args += ["--hallucination-silence-threshold", str(hallucination_silence)]
+
+        # Auditok scene-detection energy gate in dB (lower catches quieter speech)
+        scene_energy = options.get('scene_energy_threshold', None)
+        if scene_energy not in (None, ''):
+            args += ["--scene-energy-threshold", str(scene_energy)]
+
+        # Quiet-audio bundle preset (fills the above knobs with ASMR-friendly defaults)
+        if options.get('quiet_audio', False):
+            args += ["--quiet-audio"]
+
         # Accept CPU mode (skip GPU warning)
         if options.get('accept_cpu_mode', False):
             args += ["--accept-cpu-mode"]

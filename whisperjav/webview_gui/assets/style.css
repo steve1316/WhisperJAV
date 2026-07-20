@@ -710,6 +710,25 @@ body {
     min-width: 260px;
 }
 
+/* Helper/description text under form controls */
+.form-help {
+    display: block;
+    margin-top: 4px;
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--text-secondary);
+}
+
+/* Sub-section heading inside a tab panel */
+.form-section-heading {
+    margin: 12px 0 6px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-color);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
 /* ============================================================
    Buttons
    ============================================================ */

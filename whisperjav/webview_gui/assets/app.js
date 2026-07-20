@@ -713,10 +713,33 @@ const FormManager = {
             modelSelect.disabled = !modelOverrideCheckbox.checked;
         });
 
+        // Speech enhancer description (quiet-audio controls)
+        const enhancerSelect = document.getElementById('speechEnhancer');
+        if (enhancerSelect) {
+            enhancerSelect.addEventListener('change', () => this.updateEnhancerDescription());
+            this.updateEnhancerDescription();
+        }
+
         // Validate on form changes
         document.querySelectorAll('input, select').forEach(input => {
             input.addEventListener('change', () => this.validateForm());
         });
+    },
+
+    // Human-readable description of each speech enhancer backend.
+    ENHANCER_DESCRIPTIONS: {
+        'none': 'No enhancement - audio goes straight to speech detection and transcription.',
+        'clearvoice': 'ClearerVoice / MossFormer2 (48 kHz) neural denoiser. Best at lifting a quiet voice out of noise. Needs a CUDA GPU and downloads a model on first use.',
+        'zipenhancer': 'ZipEnhancer (16 kHz) - lightweight neural denoiser with near state-of-the-art quality and lower VRAM than ClearerVoice.',
+        'bs-roformer': 'BS-RoFormer (48 kHz) - neural vocal isolation that separates speech from music or background. Highest quality separation but the heaviest option.',
+        'ffmpeg-dsp': 'FFmpeg DSP - fast CPU-only filters (loudness normalize + compress + denoise). No GPU or download, but the weakest at recovering very quiet speech.',
+    },
+
+    updateEnhancerDescription() {
+        const select = document.getElementById('speechEnhancer');
+        const target = document.getElementById('speechEnhancerDesc');
+        if (!select || !target) return;
+        target.textContent = this.ENHANCER_DESCRIPTIONS[select.value] || '';
     },
 
     validateForm() {
@@ -804,6 +827,14 @@ const FormManager = {
 
             // Async processing (conditional)
             async_processing: asyncProcessingEnabled,
+
+            // Quiet / whisper audio (ASMR) controls
+            speech_enhancer: document.getElementById('speechEnhancer').value,
+            speech_enhancer_model: document.getElementById('speechEnhancerModel').value.trim(),
+            enhance_for_vad: document.getElementById('enhanceForVad').checked,
+            hallucination_silence_threshold: document.getElementById('hallucinationSilence').value.trim(),
+            scene_energy_threshold: document.getElementById('sceneEnergyThreshold').value.trim(),
+            quiet_audio: document.getElementById('quietAudio').checked,
 
         };
     }

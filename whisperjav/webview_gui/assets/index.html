@@ -356,6 +356,60 @@
                                     </label>
                                 </div>
                             </div>
+
+                            <!-- Quiet / whisper audio (ASMR) section -->
+                            <div class="form-section-heading">Quiet / whisper audio (ASMR)</div>
+                            <p class="form-help">For low-voice, whispered, or ASMR videos where Balanced misses quiet speech or Fidelity invents phantom lines. Leave everything off for normal videos. Applies to the Balanced and Fidelity modes.</p>
+
+                            <!-- Row 4: preset + dual-track -->
+                            <div class="form-row" id="adv-row-quiet">
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="quietAudio">
+                                        <span>Quiet audio / ASMR preset</span>
+                                    </label>
+                                    <small class="form-help">One-click bundle: turns on the neural enhancer (dual-track), lowers the VAD and scene-energy thresholds, and enables hallucination suppression. Any control you set yourself below overrides the preset.</small>
+                                </div>
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="enhanceForVad">
+                                        <span>Enhance for VAD only (dual-track)</span>
+                                    </label>
+                                    <small class="form-help">Use the enhanced audio only to find speech, but transcribe the original audio. Recommended with any enhancer so processing artifacts are not fed to the model.</small>
+                                </div>
+                            </div>
+
+                            <!-- Row 5: Speech enhancer backend + model -->
+                            <div class="form-row" id="adv-row-enhancer">
+                                <div class="form-group tight-pair">
+                                    <label for="speechEnhancer" class="form-label" style="white-space: nowrap;">Speech enhancer:</label>
+                                    <select id="speechEnhancer" class="form-select">
+                                        <option value="none" selected>none</option>
+                                        <option value="clearvoice">clearvoice</option>
+                                        <option value="zipenhancer">zipenhancer</option>
+                                        <option value="bs-roformer">bs-roformer</option>
+                                        <option value="ffmpeg-dsp">ffmpeg-dsp</option>
+                                    </select>
+                                </div>
+                                <div class="form-group inline-field">
+                                    <label for="speechEnhancerModel" class="form-label" style="white-space: nowrap;">Enhancer model:</label>
+                                    <input type="text" id="speechEnhancerModel" class="form-input" placeholder="optional - backend default">
+                                </div>
+                            </div>
+                            <p class="form-help" id="speechEnhancerDesc"></p>
+
+                            <!-- Row 6: Hallucination silence + scene energy thresholds -->
+                            <div class="form-row" id="adv-row-thresholds">
+                                <div class="form-group tight-pair">
+                                    <label for="hallucinationSilence" class="form-label" style="white-space: nowrap;">Hallucination silence (s):</label>
+                                    <input type="number" id="hallucinationSilence" class="form-input" min="0" step="0.5" placeholder="disabled">
+                                </div>
+                                <div class="form-group tight-pair">
+                                    <label for="sceneEnergyThreshold" class="form-label" style="white-space: nowrap;">Scene energy (dB):</label>
+                                    <input type="number" id="sceneEnergyThreshold" class="form-input" min="0" step="1" placeholder="preset">
+                                </div>
+                            </div>
+                            <p class="form-help">Hallucination silence: skip silent gaps longer than this many seconds, where phantom lines like "Thanks for watching" tend to appear (try 2). Scene energy: lower dB lets the detector pick up quieter speech (preset is ~25; try 15-20 for whispers). Leave both blank to keep the mode defaults.</p>
                         </div>
 
                         <!-- Tab 3: Two-Pass Ensemble Mode -->
