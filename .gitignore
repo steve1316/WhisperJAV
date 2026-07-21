@@ -110,6 +110,8 @@ whisperjav/output/
 **.claude/
 **/CLAUDE.md
 **/claude.md
+.superpowers/
+.playwright-mcp/
 
 #old docs in any subdirectory of are ignored
 **.docs_archive/
